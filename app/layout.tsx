@@ -14,8 +14,16 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'PackyCode API 延迟监控面板 - 实时网络延迟测试工具',
-  description: '专业的API延迟监控面板，实时测试各服务节点的网络延迟性能。支持自定义域名配置，提供准确的延迟数据分析，帮助开发者优化API服务质量。',
-  keywords: ['API延迟测试', '网络延迟监控', 'PackyCode', '服务器响应时间', 'API性能监控', '网络测速'],
+  description:
+    '专业的API延迟监控面板，实时测试各服务节点的网络延迟性能。支持自定义域名配置，提供准确的延迟数据分析，帮助开发者优化API服务质量。',
+  keywords: [
+    'API延迟测试',
+    '网络延迟监控',
+    'PackyCode',
+    '服务器响应时间',
+    'API性能监控',
+    '网络测速',
+  ],
   authors: [{ name: 'PackyCode' }],
   viewport: 'width=device-width, initial-scale=1',
   robots: 'index, follow',

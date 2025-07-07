@@ -1,7 +1,24 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import toast, { Toaster } from 'react-hot-toast';
+import { useState, useEffect, useCallback, memo } from 'react';
+import dynamic from 'next/dynamic';
+
+// 懒加载 toast 组件
+const Toaster = dynamic(
+  () => import('react-hot-toast').then(mod => ({ default: mod.Toaster })),
+  {
+    ssr: false,
+  },
+);
+
+// 动态导入 toast 函数
+let toastModule: typeof import('react-hot-toast') | null = null;
+const loadToast = async () => {
+  if (!toastModule) {
+    toastModule = await import('react-hot-toast');
+  }
+  return toastModule;
+};
 
 interface Site {
   domain: string;
@@ -9,6 +26,39 @@ interface Site {
   status: 'pending' | 'testing' | 'success' | 'error';
   testCount: number;
 }
+
+// 优化表格行组件
+const TableRow = memo(
+  ({
+    site,
+    onCopyDomain,
+    getStatusColor,
+    getStatusText,
+  }: {
+    site: Site;
+    onCopyDomain: (domain: string) => void;
+    getStatusColor: (latency: number | null) => string;
+    getStatusText: (status: string, latency: number | null) => string;
+  }) => (
+    <tr
+      onClick={() => onCopyDomain(site.domain)}
+      className="hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors cursor-pointer"
+    >
+      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+        {site.domain}
+      </td>
+      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+        <span
+          className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 rounded-full text-xs font-medium ${getStatusColor(site.latency)}`}
+        >
+          {getStatusText(site.status, site.latency)}
+        </span>
+      </td>
+    </tr>
+  ),
+);
+
+TableRow.displayName = 'TableRow';
 
 export default function Home() {
   // 从环境变量获取域名列表
@@ -34,13 +84,15 @@ export default function Home() {
   const copyDomain = async (domain: string) => {
     try {
       await navigator.clipboard.writeText(domain);
-      toast.success(`已复制: ${domain}`, {
+      const toast = await loadToast();
+      toast.default.success(`已复制: ${domain}`, {
         duration: 2000,
         position: 'top-center',
         icon: '📋',
       });
     } catch {
-      toast.error('复制失败', {
+      const toast = await loadToast();
+      toast.default.error('复制失败', {
         duration: 2000,
         position: 'top-center',
       });
@@ -141,7 +193,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isTesting, runSpeedTest]);
 
-  const getStatusColor = (latency: number | null) => {
+  const getStatusColor = useCallback((latency: number | null) => {
     if (latency === null) {
       return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
@@ -152,19 +204,22 @@ export default function Home() {
       return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
     }
     return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-  };
+  }, []);
 
-  const getStatusText = (status: string, latency: number | null) => {
-    if (latency !== null) {
-      return `${latency.toFixed(0)}ms`;
-    }
-    switch (status) {
-      case 'error':
-        return '超时';
-      default:
-        return '等待中';
-    }
-  };
+  const getStatusText = useCallback(
+    (status: string, latency: number | null) => {
+      if (latency !== null) {
+        return `${latency.toFixed(0)}ms`;
+      }
+      switch (status) {
+        case 'error':
+          return '超时';
+        default:
+          return '等待中';
+      }
+    },
+    [],
+  );
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 py-4 sm:py-8 lg:py-12 px-2 sm:px-4 lg:px-8">
@@ -192,22 +247,13 @@ export default function Home() {
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {sites.map(site => (
-                  <tr
+                  <TableRow
                     key={site.domain}
-                    onClick={() => copyDomain(site.domain)}
-                    className="hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors cursor-pointer"
-                  >
-                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                      {site.domain}
-                    </td>
-                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 rounded-full text-xs font-medium ${getStatusColor(site.latency)}`}
-                      >
-                        {getStatusText(site.status, site.latency)}
-                      </span>
-                    </td>
-                  </tr>
+                    site={site}
+                    onCopyDomain={copyDomain}
+                    getStatusColor={getStatusColor}
+                    getStatusText={getStatusText}
+                  />
                 ))}
               </tbody>
             </table>
