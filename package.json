@@ -11,6 +11,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@vercel/analytics": "^1.5.0",
+    "@vercel/speed-insights": "^1.2.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "next": "15.3.5",
     "react": "^19.0.0",
