@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     'API性能监控',
     '网络测速',
   ],
-  authors: [{ name: 'PackyCode' }],
+  authors: [{ name: 'Mashiro' }],
   viewport: 'width=device-width, initial-scale=1',
   robots: 'index, follow',
   openGraph: {

@@ -25,6 +25,7 @@ interface Site {
   latency: number | null;
   status: 'pending' | 'testing' | 'success' | 'error';
   testCount: number;
+  failureCount: number;
 }
 
 // 优化表格行组件
@@ -34,11 +35,13 @@ const TableRow = memo(
     onCopyDomain,
     getStatusColor,
     getStatusText,
+    getPacketLossRate,
   }: {
     site: Site;
     onCopyDomain: (domain: string) => void;
     getStatusColor: (latency: number | null) => string;
     getStatusText: (status: string, latency: number | null) => string;
+    getPacketLossRate: (site: Site) => string;
   }) => (
     <tr
       onClick={() => onCopyDomain(site.domain)}
@@ -53,6 +56,9 @@ const TableRow = memo(
         >
           {getStatusText(site.status, site.latency)}
         </span>
+      </td>
+      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+        {getPacketLossRate(site)}
       </td>
     </tr>
   ),
@@ -75,6 +81,7 @@ export default function Home() {
       latency: null,
       status: 'pending' as const,
       testCount: 0,
+      failureCount: 0,
     })),
   );
 
@@ -119,26 +126,23 @@ export default function Home() {
   const runSpeedTest = useCallback(async () => {
     setIsTesting(true);
 
-    // 只更新测试计数，不重置状态
-    setSites(prev =>
-      prev.map(site => ({
-        ...site,
-        testCount: site.testCount + 1,
-      })),
-    );
-
     for (let i = 0; i < sites.length; i++) {
       // 更新当前测试状态
       setSites(prev =>
         prev.map((site, index) =>
-          index === i ? { ...site, status: 'testing' as const } : site,
+          index === i
+            ? {
+                ...site,
+                status: 'testing' as const,
+              }
+            : site,
         ),
       );
 
       // 执行测试
       const latency = await testSingleDomain(sites[i].domain);
 
-      // 更新测试结果 - 只保留最好成绩
+      // 更新测试结果 - 只保留最好成绩，同时更新测试计数和失败次数
       setSites(prev => {
         const updated = prev.map((site, index) =>
           index === i
@@ -151,6 +155,9 @@ export default function Home() {
                     : site.latency,
                 status:
                   latency !== null ? ('success' as const) : ('error' as const),
+                testCount: site.testCount + 1,
+                failureCount:
+                  latency === null ? site.failureCount + 1 : site.failureCount,
               }
             : site,
         );
@@ -193,14 +200,22 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isTesting, runSpeedTest]);
 
+  const getPacketLossRate = useCallback((site: Site) => {
+    if (site.testCount === 0) {
+      return '0%';
+    }
+    const lossRate = (site.failureCount / site.testCount) * 100;
+    return `${lossRate.toFixed(1)}%`;
+  }, []);
+
   const getStatusColor = useCallback((latency: number | null) => {
     if (latency === null) {
       return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
-    if (latency < 50) {
+    if (latency < 200) {
       return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
     }
-    if (latency < 100) {
+    if (latency < 400) {
       return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
     }
     return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
@@ -237,11 +252,14 @@ export default function Home() {
             <table className="w-full table-fixed min-w-[320px]">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="w-2/3 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                  <th className="w-1/2 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
                     域名
                   </th>
-                  <th className="w-1/3 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                  <th className="w-1/4 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
                     延迟
+                  </th>
+                  <th className="w-1/4 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                    丢包率
                   </th>
                 </tr>
               </thead>
@@ -253,6 +271,7 @@ export default function Home() {
                     onCopyDomain={copyDomain}
                     getStatusColor={getStatusColor}
                     getStatusText={getStatusText}
+                    getPacketLossRate={getPacketLossRate}
                   />
                 ))}
               </tbody>
