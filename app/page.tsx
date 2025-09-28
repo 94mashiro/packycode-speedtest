@@ -26,7 +26,20 @@ interface Site {
   status: 'pending' | 'testing' | 'success' | 'error';
   testCount: number;
   failureCount: number;
+  service: '公交车' | '私家车' | 'Codex';
 }
+
+// 判断服务类型
+const getServiceType = (domain: string): '公交车' | '私家车' | 'Codex' => {
+  const lowerDomain = domain.toLowerCase();
+  if (lowerDomain.includes('codex')) {
+    return 'Codex';
+  }
+  if (lowerDomain.includes('share')) {
+    return '私家车';
+  }
+  return '公交车';
+};
 
 // 优化表格行组件
 const TableRow = memo(
@@ -49,6 +62,9 @@ const TableRow = memo(
     >
       <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
         {site.domain}
+      </td>
+      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+        {site.service}
       </td>
       <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
         <span
@@ -82,6 +98,7 @@ export default function Home() {
       status: 'pending' as const,
       testCount: 0,
       failureCount: 0,
+      service: getServiceType(domain),
     })),
   );
 
@@ -249,16 +266,19 @@ export default function Home() {
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full table-fixed min-w-[320px]">
+            <table className="w-full table-fixed min-w-[400px]">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="w-1/2 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                  <th className="w-2/5 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
                     域名
                   </th>
-                  <th className="w-1/4 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                  <th className="w-1/5 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                    服务
+                  </th>
+                  <th className="w-1/5 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
                     延迟
                   </th>
-                  <th className="w-1/4 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                  <th className="w-1/5 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
                     丢包率
                   </th>
                 </tr>
