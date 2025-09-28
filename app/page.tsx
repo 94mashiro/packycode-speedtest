@@ -59,7 +59,9 @@ const TableRow = memo(
     getPacketLossRate: (site: Site) => string;
   }) => {
     const formatLatency = (latency: number | null) => {
-      if (latency === null) return '-';
+      if (latency === null) {
+        return '-';
+      }
       return `${latency.toFixed(0)}ms`;
     };
 
@@ -191,12 +193,16 @@ export default function Home() {
 
         // 实时排序 - 按平均延迟排序
         return [...updated].sort((a, b) => {
-          const aAvgLatency = a.latencyHistory.length > 0
-            ? a.latencyHistory.reduce((sum, lat) => sum + lat, 0) / a.latencyHistory.length
-            : null;
-          const bAvgLatency = b.latencyHistory.length > 0
-            ? b.latencyHistory.reduce((sum, lat) => sum + lat, 0) / b.latencyHistory.length
-            : null;
+          const aAvgLatency =
+            a.latencyHistory.length > 0
+              ? a.latencyHistory.reduce((sum, lat) => sum + lat, 0) /
+                a.latencyHistory.length
+              : null;
+          const bAvgLatency =
+            b.latencyHistory.length > 0
+              ? b.latencyHistory.reduce((sum, lat) => sum + lat, 0) /
+                b.latencyHistory.length
+              : null;
 
           if (aAvgLatency === null && bAvgLatency === null) {
             return 0;
@@ -236,17 +242,23 @@ export default function Home() {
 
   // 统计指标计算函数
   const getMinLatency = useCallback((site: Site) => {
-    if (site.latencyHistory.length === 0) return null;
+    if (site.latencyHistory.length === 0) {
+      return null;
+    }
     return Math.min(...site.latencyHistory);
   }, []);
 
   const getMaxLatency = useCallback((site: Site) => {
-    if (site.latencyHistory.length === 0) return null;
+    if (site.latencyHistory.length === 0) {
+      return null;
+    }
     return Math.max(...site.latencyHistory);
   }, []);
 
   const getAverageLatency = useCallback((site: Site) => {
-    if (site.latencyHistory.length === 0) return null;
+    if (site.latencyHistory.length === 0) {
+      return null;
+    }
     const sum = site.latencyHistory.reduce((acc, latency) => acc + latency, 0);
     return sum / site.latencyHistory.length;
   }, []);
