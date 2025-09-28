@@ -22,7 +22,7 @@ const loadToast = async () => {
 
 interface Site {
   domain: string;
-  latency: number | null;
+  latencyHistory: number[];
   status: 'pending' | 'testing' | 'success' | 'error';
   testCount: number;
   failureCount: number;
@@ -46,38 +46,49 @@ const TableRow = memo(
   ({
     site,
     onCopyDomain,
-    getStatusColor,
-    getStatusText,
+    getMinLatency,
+    getMaxLatency,
+    getAverageLatency,
     getPacketLossRate,
   }: {
     site: Site;
     onCopyDomain: (domain: string) => void;
-    getStatusColor: (latency: number | null) => string;
-    getStatusText: (status: string, latency: number | null) => string;
+    getMinLatency: (site: Site) => number | null;
+    getMaxLatency: (site: Site) => number | null;
+    getAverageLatency: (site: Site) => number | null;
     getPacketLossRate: (site: Site) => string;
-  }) => (
-    <tr
-      onClick={() => onCopyDomain(site.domain)}
-      className="hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors cursor-pointer"
-    >
-      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-        {site.domain}
-      </td>
-      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-        {site.service}
-      </td>
-      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-        <span
-          className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 rounded-full text-xs font-medium ${getStatusColor(site.latency)}`}
-        >
-          {getStatusText(site.status, site.latency)}
-        </span>
-      </td>
-      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-        {getPacketLossRate(site)}
-      </td>
-    </tr>
-  ),
+  }) => {
+    const formatLatency = (latency: number | null) => {
+      if (latency === null) return '-';
+      return `${latency.toFixed(0)}ms`;
+    };
+
+    return (
+      <tr
+        onClick={() => onCopyDomain(site.domain)}
+        className="hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors cursor-pointer"
+      >
+        <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+          {site.domain}
+        </td>
+        <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+          {site.service}
+        </td>
+        <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+          {formatLatency(getMinLatency(site))}
+        </td>
+        <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+          {formatLatency(getMaxLatency(site))}
+        </td>
+        <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+          {formatLatency(getAverageLatency(site))}
+        </td>
+        <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+          {getPacketLossRate(site)}
+        </td>
+      </tr>
+    );
+  },
 );
 
 TableRow.displayName = 'TableRow';
@@ -94,7 +105,7 @@ export default function Home() {
   const [sites, setSites] = useState<Site[]>(() =>
     getDomains().map(domain => ({
       domain,
-      latency: null,
+      latencyHistory: [],
       status: 'pending' as const,
       testCount: 0,
       failureCount: 0,
@@ -159,17 +170,16 @@ export default function Home() {
       // 执行测试
       const latency = await testSingleDomain(sites[i].domain);
 
-      // 更新测试结果 - 只保留最好成绩，同时更新测试计数和失败次数
+      // 更新测试结果 - 记录所有延迟数据到历史记录
       setSites(prev => {
         const updated = prev.map((site, index) =>
           index === i
             ? {
                 ...site,
-                latency:
-                  latency !== null &&
-                  (site.latency === null || latency < site.latency)
-                    ? latency
-                    : site.latency,
+                latencyHistory:
+                  latency !== null
+                    ? [...site.latencyHistory, latency]
+                    : site.latencyHistory,
                 status:
                   latency !== null ? ('success' as const) : ('error' as const),
                 testCount: site.testCount + 1,
@@ -179,18 +189,25 @@ export default function Home() {
             : site,
         );
 
-        // 实时排序
+        // 实时排序 - 按平均延迟排序
         return [...updated].sort((a, b) => {
-          if (a.latency === null && b.latency === null) {
+          const aAvgLatency = a.latencyHistory.length > 0
+            ? a.latencyHistory.reduce((sum, lat) => sum + lat, 0) / a.latencyHistory.length
+            : null;
+          const bAvgLatency = b.latencyHistory.length > 0
+            ? b.latencyHistory.reduce((sum, lat) => sum + lat, 0) / b.latencyHistory.length
+            : null;
+
+          if (aAvgLatency === null && bAvgLatency === null) {
             return 0;
           }
-          if (a.latency === null) {
+          if (aAvgLatency === null) {
             return 1;
           }
-          if (b.latency === null) {
+          if (bAvgLatency === null) {
             return -1;
           }
-          return a.latency - b.latency;
+          return aAvgLatency - bAvgLatency;
         });
       });
 
@@ -217,6 +234,23 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isTesting, runSpeedTest]);
 
+  // 统计指标计算函数
+  const getMinLatency = useCallback((site: Site) => {
+    if (site.latencyHistory.length === 0) return null;
+    return Math.min(...site.latencyHistory);
+  }, []);
+
+  const getMaxLatency = useCallback((site: Site) => {
+    if (site.latencyHistory.length === 0) return null;
+    return Math.max(...site.latencyHistory);
+  }, []);
+
+  const getAverageLatency = useCallback((site: Site) => {
+    if (site.latencyHistory.length === 0) return null;
+    const sum = site.latencyHistory.reduce((acc, latency) => acc + latency, 0);
+    return sum / site.latencyHistory.length;
+  }, []);
+
   const getPacketLossRate = useCallback((site: Site) => {
     if (site.testCount === 0) {
       return '0%';
@@ -224,34 +258,6 @@ export default function Home() {
     const lossRate = (site.failureCount / site.testCount) * 100;
     return `${lossRate.toFixed(1)}%`;
   }, []);
-
-  const getStatusColor = useCallback((latency: number | null) => {
-    if (latency === null) {
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-    }
-    if (latency < 200) {
-      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-    }
-    if (latency < 400) {
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-    }
-    return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-  }, []);
-
-  const getStatusText = useCallback(
-    (status: string, latency: number | null) => {
-      if (latency !== null) {
-        return `${latency.toFixed(0)}ms`;
-      }
-      switch (status) {
-        case 'error':
-          return '超时';
-        default:
-          return '等待中';
-      }
-    },
-    [],
-  );
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 py-4 sm:py-8 lg:py-12 px-2 sm:px-4 lg:px-8">
@@ -266,19 +272,25 @@ export default function Home() {
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full table-fixed min-w-[400px]">
+            <table className="w-full table-fixed min-w-[600px]">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="w-2/5 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                  <th className="w-2/6 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
                     域名
                   </th>
-                  <th className="w-1/5 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                  <th className="w-1/6 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
                     服务
                   </th>
-                  <th className="w-1/5 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
-                    延迟
+                  <th className="w-1/6 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                    最低延迟
                   </th>
-                  <th className="w-1/5 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                  <th className="w-1/6 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                    最高延迟
+                  </th>
+                  <th className="w-1/6 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
+                    平均延迟
+                  </th>
+                  <th className="w-1/6 px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">
                     丢包率
                   </th>
                 </tr>
@@ -289,8 +301,9 @@ export default function Home() {
                     key={site.domain}
                     site={site}
                     onCopyDomain={copyDomain}
-                    getStatusColor={getStatusColor}
-                    getStatusText={getStatusText}
+                    getMinLatency={getMinLatency}
+                    getMaxLatency={getMaxLatency}
+                    getAverageLatency={getAverageLatency}
                     getPacketLossRate={getPacketLossRate}
                   />
                 ))}
