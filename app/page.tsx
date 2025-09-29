@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 
 // 懒加载 toast 组件
@@ -116,6 +116,12 @@ export default function Home() {
   );
 
   const [isTesting, setIsTesting] = useState(false);
+  const [filterType, setFilterType] = useState<
+    'all' | '公交车' | '私家车' | 'Codex'
+  >('all');
+
+  // 并发测试配置
+  const CONCURRENT_LIMIT = 6;
 
   // 复制域名到剪贴板
   const copyDomain = async (domain: string) => {
@@ -152,44 +158,56 @@ export default function Home() {
     }
   };
 
-  // 串行测试所有域名
+  // 分批并行测试所有域名
   const runSpeedTest = useCallback(async () => {
     setIsTesting(true);
 
-    for (let i = 0; i < sites.length; i++) {
-      // 更新当前测试状态
+    // 分批处理，每批并发数量为 CONCURRENT_LIMIT
+    for (let i = 0; i < sites.length; i += CONCURRENT_LIMIT) {
+      const batch = sites.slice(i, i + CONCURRENT_LIMIT);
+      const batchIndices = Array.from(
+        { length: batch.length },
+        (_, idx) => i + idx,
+      );
+
+      // 设置当前批次为测试状态
       setSites(prev =>
         prev.map((site, index) =>
-          index === i
-            ? {
-                ...site,
-                status: 'testing' as const,
-              }
+          batchIndices.includes(index)
+            ? { ...site, status: 'testing' as const }
             : site,
         ),
       );
 
-      // 执行测试
-      const latency = await testSingleDomain(sites[i].domain);
+      // 并行测试当前批次
+      const batchResults = await Promise.allSettled(
+        batch.map(site => testSingleDomain(site.domain)),
+      );
 
-      // 更新测试结果 - 记录所有延迟数据到历史记录
+      // 更新测试结果
       setSites(prev => {
-        const updated = prev.map((site, index) =>
-          index === i
-            ? {
-                ...site,
-                latencyHistory:
-                  latency !== null
-                    ? [...site.latencyHistory, latency]
-                    : site.latencyHistory,
-                status:
-                  latency !== null ? ('success' as const) : ('error' as const),
-                testCount: site.testCount + 1,
-                failureCount:
-                  latency === null ? site.failureCount + 1 : site.failureCount,
-              }
-            : site,
-        );
+        const updated = prev.map((site, index) => {
+          const batchIndex = batchIndices.indexOf(index);
+          if (batchIndex === -1) {
+            return site;
+          }
+
+          const result = batchResults[batchIndex];
+          const latency = result.status === 'fulfilled' ? result.value : null;
+
+          return {
+            ...site,
+            latencyHistory:
+              latency !== null
+                ? [...site.latencyHistory, latency]
+                : site.latencyHistory,
+            status:
+              latency !== null ? ('success' as const) : ('error' as const),
+            testCount: site.testCount + 1,
+            failureCount:
+              latency === null ? site.failureCount + 1 : site.failureCount,
+          };
+        });
 
         // 实时排序 - 按平均延迟排序
         return [...updated].sort((a, b) => {
@@ -217,8 +235,10 @@ export default function Home() {
         });
       });
 
-      // 测试间隔
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // 批次间隔
+      if (i + CONCURRENT_LIMIT < sites.length) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
     }
 
     setIsTesting(false);
@@ -271,6 +291,14 @@ export default function Home() {
     return `${lossRate.toFixed(1)}%`;
   }, []);
 
+  // 根据筛选条件过滤站点
+  const filteredSites = useMemo(() => {
+    if (filterType === 'all') {
+      return sites;
+    }
+    return sites.filter(site => site.service === filterType);
+  }, [sites, filterType]);
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 py-4 sm:py-8 lg:py-12 px-2 sm:px-4 lg:px-8">
       <div className="max-w-6xl mx-auto">
@@ -278,9 +306,26 @@ export default function Home() {
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-light tracking-tight text-gray-900 dark:text-white mb-4 leading-tight font-[family-name:var(--font-geist-sans)]">
             PackyCode API 延迟监控面板
           </h1>
-          <p className="text-base sm:text-lg text-gray-500 dark:text-gray-400 font-normal max-w-2xl mx-auto leading-relaxed font-[family-name:var(--font-geist-sans)]">
+          <p className="text-base sm:text-lg text-gray-500 dark:text-gray-400 font-normal max-w-2xl mx-auto leading-relaxed font-[family-name:var(--font-geist-sans)] mb-6">
             实时监控各服务节点的网络延迟性能，点击表格行即可复制对应的 API 地址
           </p>
+
+          {/* 服务类型筛选 */}
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+            {(['all', '公交车', '私家车', 'Codex'] as const).map(type => (
+              <button
+                key={type}
+                onClick={() => setFilterType(type)}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
+                  filterType === type
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {type === 'all' ? '全部' : type}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
@@ -308,7 +353,7 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {sites.map(site => (
+                {filteredSites.map(site => (
                   <TableRow
                     key={site.domain}
                     site={site}
