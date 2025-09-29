@@ -60,9 +60,31 @@ const TableRow = memo(
   }) => {
     const formatLatency = (latency: number | null) => {
       if (latency === null) {
-        return '-';
+        return (
+          <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+            -
+          </span>
+        );
       }
-      return `${latency.toFixed(0)}ms`;
+
+      const value = `${latency.toFixed(0)}ms`;
+      let colorClass = '';
+
+      if (latency < 200) {
+        colorClass = 'bg-green-500 text-white';
+      } else if (latency < 400) {
+        colorClass = 'bg-yellow-500 text-white';
+      } else {
+        colorClass = 'bg-red-500 text-white';
+      }
+
+      return (
+        <span
+          className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}
+        >
+          {value}
+        </span>
+      );
     };
 
     return (
@@ -259,18 +281,40 @@ export default function Home() {
 
   // 自动循环测试
   useEffect(() => {
-    // 页面加载后立即开始第一次测试
-    if (!isTesting) {
-      runSpeedTest();
-    }
+    let intervalId: NodeJS.Timeout | null = null;
 
-    const interval = setInterval(() => {
+    // 页面可见性变化处理
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !isTesting) {
+        // 页面变为可见时，立即开始测试
+        runSpeedTest();
+      }
+    };
+
+    // 监听页面可见性变化
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 只在页面可见时运行测试
+    if (!document.hidden) {
+      // 页面加载后立即开始第一次测试
       if (!isTesting) {
         runSpeedTest();
       }
-    }, 100); // 频繁检查，一轮完成立刻开始下一轮
 
-    return () => clearInterval(interval);
+      // 设置循环测试（仅在页面可见时）
+      intervalId = setInterval(() => {
+        if (!isTesting && !document.hidden) {
+          runSpeedTest();
+        }
+      }, 100); // 频繁检查，一轮完成立刻开始下一轮
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [isTesting, runSpeedTest]);
 
   // 统计指标计算函数
