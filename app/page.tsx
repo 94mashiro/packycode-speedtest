@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, memo, useMemo } from 'react';
+import { useState, useCallback, memo, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 
 // 懒加载 toast 组件
@@ -138,12 +138,15 @@ export default function Home() {
   );
 
   const [isTesting, setIsTesting] = useState(false);
+  const [currentRound, setCurrentRound] = useState(0);
+  const [isManualTesting, setIsManualTesting] = useState(false);
   const [filterType, setFilterType] = useState<
     'all' | '公交车' | '私家车' | 'Codex'
   >('all');
 
   // 并发测试配置
   const CONCURRENT_LIMIT = 6;
+  const TOTAL_ROUNDS = 5;
 
   // 复制域名到剪贴板
   const copyDomain = async (domain: string) => {
@@ -279,43 +282,25 @@ export default function Home() {
     setIsTesting(false);
   }, [sites]);
 
-  // 自动循环测试
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
+  // 手动测试控制函数
+  const startManualTest = useCallback(async () => {
+    setIsManualTesting(true);
+    setCurrentRound(0);
 
-    // 页面可见性变化处理
-    const handleVisibilityChange = () => {
-      if (!document.hidden && !isTesting) {
-        // 页面变为可见时，立即开始测试
-        runSpeedTest();
+    // 执行5轮测试
+    for (let round = 1; round <= TOTAL_ROUNDS; round++) {
+      setCurrentRound(round);
+      await runSpeedTest();
+
+      // 等待当前轮完成
+      while (isTesting) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
-    };
-
-    // 监听页面可见性变化
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // 只在页面可见时运行测试
-    if (!document.hidden) {
-      // 页面加载后立即开始第一次测试
-      if (!isTesting) {
-        runSpeedTest();
-      }
-
-      // 设置循环测试（仅在页面可见时）
-      intervalId = setInterval(() => {
-        if (!isTesting && !document.hidden) {
-          runSpeedTest();
-        }
-      }, 100); // 频繁检查，一轮完成立刻开始下一轮
     }
 
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [isTesting, runSpeedTest]);
+    setIsManualTesting(false);
+    setCurrentRound(0);
+  }, [runSpeedTest, isTesting, TOTAL_ROUNDS]);
 
   // 统计指标计算函数
   const getMinLatency = useCallback((site: Site) => {
@@ -366,6 +351,23 @@ export default function Home() {
           <p className="text-base sm:text-lg text-gray-500 dark:text-gray-400 font-normal max-w-2xl mx-auto leading-relaxed font-[family-name:var(--font-geist-sans)] mb-6">
             实时监控各服务节点的网络延迟性能，点击表格行即可复制对应的 API 地址
           </p>
+
+          {/* 测试控制按钮 */}
+          <div className="mb-6">
+            <button
+              onClick={startManualTest}
+              disabled={isManualTesting}
+              className={`px-6 py-3 rounded-lg font-medium text-base transition-colors ${
+                isManualTesting
+                  ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed text-gray-500 dark:text-gray-400'
+                  : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg hover:shadow-xl'
+              }`}
+            >
+              {isManualTesting
+                ? `测试中 (${currentRound}/${TOTAL_ROUNDS})`
+                : '开始测试'}
+            </button>
+          </div>
 
           {/* 服务类型筛选 */}
           <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
