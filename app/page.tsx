@@ -158,87 +158,100 @@ export default function Home() {
     }
   };
 
-  // 分批并行测试所有域名
+  // 真正的并发测试所有域名
   const runSpeedTest = useCallback(async () => {
     setIsTesting(true);
 
-    // 分批处理，每批并发数量为 CONCURRENT_LIMIT
-    for (let i = 0; i < sites.length; i += CONCURRENT_LIMIT) {
-      const batch = sites.slice(i, i + CONCURRENT_LIMIT);
-      const batchIndices = Array.from(
-        { length: batch.length },
-        (_, idx) => i + idx,
-      );
+    // 创建测试队列：所有站点的索引
+    const queue = [...Array(sites.length).keys()];
+    let activeTests = 0;
+    let completedTests = 0;
 
-      // 设置当前批次为测试状态
+    // 递归测试函数
+    const testNext = async (): Promise<void> => {
+      if (queue.length === 0 || activeTests >= CONCURRENT_LIMIT) {
+        return;
+      }
+
+      const index = queue.shift()!;
+      activeTests++;
+
+      // 立即标记为测试状态
       setSites(prev =>
-        prev.map((site, index) =>
-          batchIndices.includes(index)
-            ? { ...site, status: 'testing' as const }
-            : site,
+        prev.map((site, i) =>
+          i === index ? { ...site, status: 'testing' as const } : site,
         ),
       );
 
-      // 并行测试当前批次
-      const batchResults = await Promise.allSettled(
-        batch.map(site => testSingleDomain(site.domain)),
-      );
+      try {
+        // 执行测试
+        const latency = await testSingleDomain(sites[index].domain);
 
-      // 更新测试结果
-      setSites(prev => {
-        const updated = prev.map((site, index) => {
-          const batchIndex = batchIndices.indexOf(index);
-          if (batchIndex === -1) {
-            return site;
-          }
+        // 立即更新该站点的测试结果
+        setSites(prev => {
+          const updated = prev.map((site, i) => {
+            if (i !== index) {
+              return site;
+            }
 
-          const result = batchResults[batchIndex];
-          const latency = result.status === 'fulfilled' ? result.value : null;
+            return {
+              ...site,
+              latencyHistory:
+                latency !== null
+                  ? [...site.latencyHistory, latency]
+                  : site.latencyHistory,
+              status:
+                latency !== null ? ('success' as const) : ('error' as const),
+              testCount: site.testCount + 1,
+              failureCount:
+                latency === null ? site.failureCount + 1 : site.failureCount,
+            };
+          });
 
-          return {
-            ...site,
-            latencyHistory:
-              latency !== null
-                ? [...site.latencyHistory, latency]
-                : site.latencyHistory,
-            status:
-              latency !== null ? ('success' as const) : ('error' as const),
-            testCount: site.testCount + 1,
-            failureCount:
-              latency === null ? site.failureCount + 1 : site.failureCount,
-          };
+          // 实时排序 - 按平均延迟排序
+          return [...updated].sort((a, b) => {
+            const aAvgLatency =
+              a.latencyHistory.length > 0
+                ? a.latencyHistory.reduce((sum, lat) => sum + lat, 0) /
+                  a.latencyHistory.length
+                : null;
+            const bAvgLatency =
+              b.latencyHistory.length > 0
+                ? b.latencyHistory.reduce((sum, lat) => sum + lat, 0) /
+                  b.latencyHistory.length
+                : null;
+
+            if (aAvgLatency === null && bAvgLatency === null) {
+              return 0;
+            }
+            if (aAvgLatency === null) {
+              return 1;
+            }
+            if (bAvgLatency === null) {
+              return -1;
+            }
+            return aAvgLatency - bAvgLatency;
+          });
         });
+      } finally {
+        activeTests--;
+        completedTests++;
 
-        // 实时排序 - 按平均延迟排序
-        return [...updated].sort((a, b) => {
-          const aAvgLatency =
-            a.latencyHistory.length > 0
-              ? a.latencyHistory.reduce((sum, lat) => sum + lat, 0) /
-                a.latencyHistory.length
-              : null;
-          const bAvgLatency =
-            b.latencyHistory.length > 0
-              ? b.latencyHistory.reduce((sum, lat) => sum + lat, 0) /
-                b.latencyHistory.length
-              : null;
-
-          if (aAvgLatency === null && bAvgLatency === null) {
-            return 0;
-          }
-          if (aAvgLatency === null) {
-            return 1;
-          }
-          if (bAvgLatency === null) {
-            return -1;
-          }
-          return aAvgLatency - bAvgLatency;
-        });
-      });
-
-      // 批次间隔
-      if (i + CONCURRENT_LIMIT < sites.length) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // 如果还有待测试的站点，继续下一个
+        if (queue.length > 0) {
+          testNext();
+        }
       }
+    };
+
+    // 启动初始并发测试
+    for (let i = 0; i < Math.min(CONCURRENT_LIMIT, sites.length); i++) {
+      testNext();
+    }
+
+    // 等待所有测试完成
+    while (completedTests < sites.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     setIsTesting(false);
