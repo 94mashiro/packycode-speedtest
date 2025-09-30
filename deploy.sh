@@ -86,7 +86,7 @@ deploy() {
 
     # 构建项目
     print_status "构建项目..."
-    export NEXT_PUBLIC_DOMAINS='share-api.packycode.com,share-api-hk-cn2.packycode.com,share-api-hk-g.packycode.com,share-api-us-cn2.packycode.com,share-api-cf-pro.packycode.com,api.packycode.com,api-hk-cn2.packycode.com,api-hk-g.packycode.com,api-us-cn2.packycode.com,api-cf-pro.packycode.com,codex-api.packycode.com,codex-api-hk-cn2.packycode.com,codex-api-hk-cdn.packycode.com,codex-api-cf-pro.packycode.com'
+    export NEXT_PUBLIC_DOMAINS='share-api.packycode.com,share-api-optimize.packycode.com,share-api-hk-cn2.packycode.com,share-api-hk-g.packycode.com,share-api-us-cn2.packycode.com,share-api-cf-pro.packycode.com,api.packycode.com,api-optimize.packycode.com,api-hk-cn2.packycode.com,api-hk-g.packycode.com,api-us-cn2.packycode.com,codex-api.packycode.com,codex-api-hk-cn2.packycode.com,codex-api-hk-cdn.packycode.com,codex-api-cf-pro.packycode.com'
     export PORT=4433
     pnpm run build
 

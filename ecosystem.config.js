@@ -18,7 +18,7 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 4433,
         NEXT_PUBLIC_DOMAINS:
-          'share-api.packycode.com,share-api-hk-cn2.packycode.com,share-api-hk-g.packycode.com,share-api-us-cn2.packycode.com,share-api-cf-pro.packycode.com,api.packycode.com,api-hk-cn2.packycode.com,api-hk-g.packycode.com,api-us-cn2.packycode.com,api-cf-pro.packycode.com,codex-api.packycode.com,codex-api-hk-cn2.packycode.com,codex-api-hk-cdn.packycode.com',
+          'share-api.packycode.com,share-api-optimize.packycode.com,share-api-hk-cn2.packycode.com,share-api-hk-g.packycode.com,share-api-us-cn2.packycode.com,share-api-cf-pro.packycode.com,api.packycode.com,api-optimize.packycode.com,api-hk-cn2.packycode.com,api-hk-g.packycode.com,api-us-cn2.packycode.com,codex-api.packycode.com,codex-api-hk-cn2.packycode.com,codex-api-hk-cdn.packycode.com,codex-api-cf-pro.packycode.com',
       },
       env_development: {
         NODE_ENV: 'development',

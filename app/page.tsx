@@ -146,7 +146,7 @@ export default function Home() {
 
   // 并发测试配置
   const CONCURRENT_LIMIT = 6;
-  const TOTAL_ROUNDS = 5;
+  const TOTAL_ROUNDS = 10;
 
   // 复制域名到剪贴板
   const copyDomain = async (domain: string) => {
@@ -287,7 +287,7 @@ export default function Home() {
     setIsManualTesting(true);
     setCurrentRound(0);
 
-    // 执行5轮测试
+    // 执行10轮测试
     for (let round = 1; round <= TOTAL_ROUNDS; round++) {
       setCurrentRound(round);
       await runSpeedTest();
@@ -295,6 +295,11 @@ export default function Home() {
       // 等待当前轮完成
       while (isTesting) {
         await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // 每轮测试完成后暂停1秒（最后一轮除外）
+      if (round < TOTAL_ROUNDS) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
