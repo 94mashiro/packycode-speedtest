@@ -151,9 +151,10 @@ export default function Home() {
   // 复制域名到剪贴板
   const copyDomain = async (domain: string) => {
     try {
-      await navigator.clipboard.writeText(domain);
+      const urlWithProtocol = `https://${domain}`;
+      await navigator.clipboard.writeText(urlWithProtocol);
       const toast = await loadToast();
-      toast.default.success(`已复制: ${domain}`, {
+      toast.default.success(`已复制: ${urlWithProtocol}`, {
         duration: 2000,
         position: 'top-center',
         icon: '📋',
